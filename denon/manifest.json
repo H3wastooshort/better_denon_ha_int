@@ -4,5 +4,8 @@
   "codeowners": [],
   "documentation": "https://www.home-assistant.io/integrations/denon",
   "iot_class": "local_polling",
-  "quality_scale": "legacy"
+  "quality_scale": "legacy",
+  "version": "0.2026.03.24",
+  "integration_type":"device",
+  "requirements": "telnetlib"
 }

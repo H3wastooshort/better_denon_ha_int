@@ -6,6 +6,7 @@ import logging
 
 import telnetlib  # pylint: disable=deprecated-module
 import voluptuous as vol
+import time
 
 from homeassistant.components.media_player import (
     PLATFORM_SCHEMA as MEDIA_PLAYER_PLATFORM_SCHEMA,
@@ -90,25 +91,84 @@ def setup_platform(
     if denon.do_update():
         add_entities([denon])
 
+class TelnetError(Exception):
+    pass
 
 class DenonDevice(MediaPlayerEntity):
     """Representation of a Denon device."""
 
     def __init__(self, name, host):
         """Initialize the Denon device."""
-        self._name = name
-        self._host = host
-        self._pwstate = "PWSTANDBY"
-        self._volume = 0
+        self._name : str = name
+        self._host : str = host
+        self._pwstate : str = "PWSTANDBY"
+        self._volume : int = 0
         # Initial value 60dB, changed if we get a MVMAX
-        self._volume_max = 60
-        self._source_list = NORMAL_INPUTS.copy()
+        self._volume_max : int = 60
+        self._source_list : list = NORMAL_INPUTS.copy()
         self._source_list.update(MEDIA_MODES)
-        self._muted = False
-        self._mediasource = ""
-        self._mediainfo = ""
+        self._muted : bool = False
+        self._mediasource : str = ""
+        self._mediainfo : str = ""
 
         self._should_setup_sources = True
+
+    def _connect_telnet(self) -> telnetlib.Telnet:
+        try:
+            _LOGGER.debug("Attempting connection to %s", self._host)
+            return telnetlib.Telnet(self._host)
+        except OSError as e:
+            _LOGGER.debug("Connection to %s failed: %s", host, str(e))
+            raise TelnetError("could not open connection: "+str(e))
+
+    @classmethod
+    def _read_telnet(self,telnet) -> str:
+        try:
+            return telnet.read_very_eager().decode("ASCII")
+        except EOFError as e:
+            raise TelnetError("connection closed unexpectedly: "+str(e))
+
+    @classmethod
+    def _write_telnet(self,telnet,command):
+        _LOGGER.debug("Sending: %s", command)
+        try:
+            telnet.write(command.encode("ASCII") + b"\r")
+        except EOFError as e:
+            raise TelnetError("connection closed unexpectedly: "+str(e))
+
+    @classmethod
+    def _read_telnet_until_pause(self, telnet) -> str:
+        rcv = ""
+        starttime = time.monotonic_ns()
+        time_since_data = starttime
+        while True:
+            incoming = self._read_telnet(telnet)
+            time.sleep(0.01)
+            if len(incoming) > 1:
+                time_since_data = time.monotonic_ns()
+            if time.monotonic_ns() - time_since_data > (200 * 1000 * 1000): #wait 200ms for stop of data flow
+                break
+            if time.monotonic_ns() - starttime > (1000 * 1000 * 1000): #wait for nomore than 1000ms
+                break
+        return rcv
+
+    @classmethod
+    def telnet_request(self, telnet, command, all_lines=False):
+        """Execute `command` and return the response."""
+        self._read_telnet(telnet) #clear buffer
+        self._write_telnet(command)
+        lines = self._read_telnet_until_pause().split("\r")
+        lines = [l.strip() for l in lines]
+        _LOGGER.debug("Received: %s", str(lines))
+        if all_lines:
+            return lines
+        return lines[0] if lines else ""
+
+    def telnet_command(self, command) -> None:
+        """Establish a telnet connection and sends `command`."""
+        telnet = self._connect_telnet()
+        self._write_telnet(telnet)
+        telnet.close()
 
     def _setup_sources(self, telnet):
         # NSFRN - Network name
@@ -139,31 +199,6 @@ class DenonDevice(MediaPlayerEntity):
                         del self._source_list[pretty_name]
                         break
 
-    @classmethod
-    def telnet_request(cls, telnet, command, all_lines=False):
-        """Execute `command` and return the response."""
-        _LOGGER.debug("Sending: %s", command)
-        telnet.write(command.encode("ASCII") + b"\r")
-        lines = []
-        while True:
-            line = telnet.read_until(b"\r", timeout=0.2)
-            if not line:
-                break
-            lines.append(line.decode("ASCII").strip())
-            _LOGGER.debug("Received: %s", line)
-
-        if all_lines:
-            return lines
-        return lines[0] if lines else ""
-
-    def telnet_command(self, command):
-        """Establish a telnet connection and sends `command`."""
-        telnet = telnetlib.Telnet(self._host)
-        _LOGGER.debug("Sending: %s", command)
-        telnet.write(command.encode("ASCII") + b"\r")
-        telnet.read_very_eager()  # skip response
-        telnet.close()
-
     def update(self) -> None:
         """Get the latest details from the device."""
         self.do_update()
@@ -171,8 +206,8 @@ class DenonDevice(MediaPlayerEntity):
     def do_update(self) -> bool:
         """Get the latest details from the device, as boolean."""
         try:
-            telnet = telnetlib.Telnet(self._host)
-        except OSError:
+            telnet = self._connect_telnet()
+        except TelnetError:
             return False
 
         if self._should_setup_sources:
