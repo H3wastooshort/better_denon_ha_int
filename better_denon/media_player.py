@@ -139,7 +139,7 @@ class DenonDevice(MediaPlayerEntity):
     def _read_telnet_until_pause(self, telnet) -> str:
         rcv = ""
         starttime = time.monotonic_ns()
-        time_since_data = starttime 
+        time_since_data = starttime + (1000 * 1000 * 1000) #give extra 1000ms initially for high ping
         while True:
             incoming = self._read_telnet(telnet)
             time.sleep(0.01)
@@ -148,7 +148,7 @@ class DenonDevice(MediaPlayerEntity):
                 time_since_data = t_now
             if t_now - time_since_data > (200 * 1000 * 1000): #wait 200ms for stop of data flow
                 break
-            if t_now - starttime > (1000 * 1000 * 1000): #wait for nomore than 1000ms
+            if t_now - starttime > (2000 * 1000 * 1000): #wait for nomore than 1000ms
                 break
         _LOGGER.debug("Full Read in %.1fms: %s", ((time.monotonic_ns() - starttime) / 1000) / 1000, r)
         return rcv
