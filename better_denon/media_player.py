@@ -154,7 +154,7 @@ class DenonDevice(MediaPlayerEntity):
         """Execute `command` and return the response."""
         self._read_telnet(telnet) #clear buffer
         self._write_telnet(telnet, command)
-        lines = self._read_telnet_until_pause().split("\r")
+        lines = self._read_telnet_until_pause(telnet).split("\r")
         lines = [l.strip() for l in lines]
         _LOGGER.debug("Received: %s", str(lines))
         if all_lines:
