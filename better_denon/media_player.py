@@ -150,7 +150,7 @@ class DenonDevice(MediaPlayerEntity):
                 break
             if t_now - starttime > (1000 * 1000 * 1000): #wait for nomore than 1000ms
                 break
-        _LOGGER.debug("Full Read in %.1fms: %s", ((time.monotonic_ns() - starttime) / 1000) / 1000, r)
+        _LOGGER.debug("Full Read in %.1fms: %s", ((time.monotonic_ns() - starttime) / 1000) / 1000), r)
         return rcv
 
     @classmethod
