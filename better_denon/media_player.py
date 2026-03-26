@@ -292,7 +292,7 @@ class DenonDevice(MediaPlayerEntity):
     @property
     def volume_level(self):
         """Volume level of the media player (0..1)."""
-        return self._volume / self._volume_max
+        return round(self._volume / self._volume_max)
 
     @property
     def is_volume_muted(self):
