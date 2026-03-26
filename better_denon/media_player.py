@@ -103,8 +103,7 @@ class DenonDevice(MediaPlayerEntity):
         self._volume : int = 0
         # Initial value 60dB, changed if we get a MVMAX
         self._volume_max : int = 60
-        self._source_list : list = NORMAL_INPUTS.copy()
-        self._source_list.update(MEDIA_MODES)
+        self._source_list : list = []
         self._muted : bool = False
         self._mediasource : str = ""
         self._mediainfo : str = ""
