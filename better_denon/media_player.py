@@ -372,4 +372,5 @@ class DenonDevice(MediaPlayerEntity):
 
     def select_source(self, source: str) -> None:
         """Select input source."""
-        self.telnet_command(f"SI{self._source_list.get(source)}")
+        src_denon = self._source_list.get(source,source)
+        self.telnet_command(f"SI{src_denon}")
