@@ -142,6 +142,7 @@ class DenonDevice(MediaPlayerEntity):
         time_since_data = starttime + (1000 * 1000 * 1000) #give extra 1000ms initially for high ping
         while True:
             incoming = self._read_telnet(telnet)
+            rcv += incoming
             time.sleep(0.01)
             t_now = time.monotonic_ns()
             if len(incoming) > 1:
