@@ -366,6 +366,7 @@ class DenonDevice(MediaPlayerEntity):
     def turn_on(self) -> None:
         """Turn the media player on."""
         self.telnet_command("PWON")
+        self._should_setup_sources = True
 
     def select_source(self, source: str) -> None:
         """Select input source."""
