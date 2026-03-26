@@ -154,7 +154,7 @@ class DenonDevice(MediaPlayerEntity):
     def telnet_request(self, telnet, command, all_lines=False):
         """Execute `command` and return the response."""
         self._read_telnet(telnet) #clear buffer
-        self._write_telnet(command)
+        self._write_telnet(telnet, command)
         lines = self._read_telnet_until_pause().split("\r")
         lines = [l.strip() for l in lines]
         _LOGGER.debug("Received: %s", str(lines))
@@ -165,7 +165,7 @@ class DenonDevice(MediaPlayerEntity):
     def telnet_command(self, command) -> None:
         """Establish a telnet connection and sends `command`."""
         telnet = self._connect_telnet()
-        self._write_telnet(telnet)
+        self._write_telnet(telnet,command)
         telnet.close()
 
     def _setup_sources(self, telnet):
