@@ -168,7 +168,7 @@ class DenonDevice(MediaPlayerEntity):
         telnet.close()
 
     @classmethod
-    def _get_data(raw:str,key:str):
+    def _get_data(self, raw:str,key:str):
         """Gets data after key"""
         start = raw.index(key) + len(key)
         end = raw.find("\r", start)
