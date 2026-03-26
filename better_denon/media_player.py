@@ -61,7 +61,7 @@ NORMAL_INPUTS = {
 MEDIA_MODES = {
     "Tuner": "TUNER",
     "Media server": "SERVER",
-    "Ipod dock": "IPOD",
+    "iPod dock": "IPOD",
     "Net/USB": "NET/USB",
     "Rapsody": "RHAPSODY",
     "Napster": "NAPSTER",
@@ -190,7 +190,7 @@ class DenonDevice(MediaPlayerEntity):
                     pass
 
         # SSFUN - Configured sources with (optional) names
-        self._source_list = MEDIA_MODES
+        self._source_list = dict()
         for line in self.telnet_request(telnet, "SSFUN ?", all_lines=True):
             try:
                 ssfun = self._get_data(line,"SSFUN")
@@ -206,6 +206,8 @@ class DenonDevice(MediaPlayerEntity):
                 configured_name = source
 
             self._source_list[configured_name] = source
+        if len(self._source_list) == 0: #if SSFUN unsupported
+            self._source_list = NORMAL_INPUTS | MEDIA_MODES
 
         # SSSOD - Deleted sources
         for line in self.telnet_request(telnet, "SSSOD ?", all_lines=True):
