@@ -167,16 +167,31 @@ class DenonDevice(MediaPlayerEntity):
         self._write_telnet(telnet,command)
         telnet.close()
 
+    @classmethod
+    def _get_data(raw:str,key:str):
+        """Gets data after key"""
+        start = raw.index(key) + len(key)
+        end = raw.find("\r", start)
+        return raw[start:end]
+
     def _setup_sources(self, telnet):
         # NSFRN - Network name
-        nsfrn = self.telnet_request(telnet, "NSFRN ?").removeprefix("NSFRN ")
-        if nsfrn:
-            self._name = nsfrn
+        if self._name is None:
+            nsfrn = self.telnet_request(telnet, "NSFRN ?")
+            for line in nsfrn.split("\r"):
+                try:
+                    self._name = self._get_data(line,"NSFRN ")
+                except ValueError:
+                    pass
 
         # SSFUN - Configured sources with (optional) names
         self._source_list = {}
         for line in self.telnet_request(telnet, "SSFUN ?", all_lines=True):
-            ssfun = line.removeprefix("SSFUN").split(" ", 1)
+            try:
+                ssfun = self._get_data(line,"SSFUN")
+                ssfun = ssfun.split(" ", 1)
+            except ValueError:
+                continue
 
             source = ssfun[0]
             if len(ssfun) == 2 and ssfun[1]:
@@ -189,7 +204,11 @@ class DenonDevice(MediaPlayerEntity):
 
         # SSSOD - Deleted sources
         for line in self.telnet_request(telnet, "SSSOD ?", all_lines=True):
-            source, status = line.removeprefix("SSSOD").split(" ", 1)
+            try:
+                data = self._get_data(line,"SSSOD")
+            except ValueError:
+                continue
+            source, status = data.split(" ", 1)
             if status == "DEL":
                 for pretty_name, name in self._source_list.items():
                     if source == name:
@@ -220,7 +239,10 @@ class DenonDevice(MediaPlayerEntity):
             if line.startswith("MV"):
                 self._volume = int(line.removeprefix("MV"))
         self._muted = self.telnet_request(telnet, "MU?") == "MUON"
-        self._mediasource = self.telnet_request(telnet, "SI?").removeprefix("SI")
+        self._mediasource = self._get_data(
+            self.telnet_request(telnet, "SI?"),
+            "SI"
+        )
 
         if self._mediasource in MEDIA_MODES.values():
             self._mediainfo = ""
@@ -235,8 +257,10 @@ class DenonDevice(MediaPlayerEntity):
                 "NSE7",
                 "NSE8",
             ]
-            for line in self.telnet_request(telnet, "NSE", all_lines=True):
-                self._mediainfo += f"{line.removeprefix(answer_codes.pop(0))}\n"
+            answer = self.telnet_request(telnet, "NSE", all_lines=True)
+            self._mediainfo += "\n".join(
+                [self._get_data(answer, code) for code in answer_codes] 
+            )
         else:
             self._mediainfo = self.source
 
