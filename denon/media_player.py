@@ -87,9 +87,7 @@ def setup_platform(
 ) -> None:
     """Set up the Denon platform."""
     denon = DenonDevice(config[CONF_NAME], config[CONF_HOST])
-
-    if denon.do_update():
-        add_entities([denon])
+    add_entities([denon])
 
 class TelnetError(Exception):
     pass
