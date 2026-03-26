@@ -190,7 +190,7 @@ class DenonDevice(MediaPlayerEntity):
                     pass
 
         # SSFUN - Configured sources with (optional) names
-        self._source_list = {}
+        self._source_list = MEDIA_MODES
         for line in self.telnet_request(telnet, "SSFUN ?", all_lines=True):
             try:
                 ssfun = self._get_data(line,"SSFUN")
