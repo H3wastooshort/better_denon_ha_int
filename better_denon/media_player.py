@@ -103,7 +103,7 @@ class DenonDevice(MediaPlayerEntity):
         self._volume : int = 0
         # Initial value 60dB, changed if we get a MVMAX
         self._volume_max : int = 60
-        self._source_list : list = []
+        self._source_list : dict = dict()
         self._muted : bool = False
         self._mediasource : str = ""
         self._mediainfo : str = ""
@@ -304,7 +304,7 @@ class DenonDevice(MediaPlayerEntity):
     @property
     def source_list(self):
         """Return the list of available input sources."""
-        return sorted(self._source_list)
+        return sorted(self._source_list.keys())
 
     @property
     def media_title(self):
