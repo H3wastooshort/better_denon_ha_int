@@ -47,14 +47,14 @@ PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
 )
 
 NORMAL_INPUTS = {
-    "Cd": "CD",
-    "Dvd": "DVD",
-    "Blue ray": "BD",
+    "CD": "CD",
+    "DVD": "DVD",
+    "Blu-Ray": "BD",
     "TV": "TV",
     "Satellite / Cable": "SAT/CBL",
     "Game": "GAME",
-    "Game2": "GAME2",
-    "Video Aux": "V.AUX",
+    "Game 2": "GAME2",
+    "Front AUX": "V.AUX",
     "Dock": "DOCK",
 }
 
@@ -70,7 +70,7 @@ MEDIA_MODES = {
     "Flickr": "FLICKR",
     "Favorites": "FAVORITES",
     "Internet Radio": "IRADIO",
-    "USB/IPOD": "USB/IPOD",
+    "USB/iPod": "USB/IPOD",
     "USB": "USB",
 }
 
