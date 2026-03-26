@@ -115,7 +115,7 @@ class DenonDevice(MediaPlayerEntity):
             _LOGGER.debug("Attempting connection to %s", self._host)
             return telnetlib.Telnet(self._host)
         except OSError as e:
-            _LOGGER.debug("Connection to %s failed: %s", host, str(e))
+            _LOGGER.error("Connection to %s failed: %s", host, str(e))
             raise TelnetError("could not open connection: "+str(e))
 
     @classmethod
@@ -125,6 +125,7 @@ class DenonDevice(MediaPlayerEntity):
             _LOGGER.debug("Partial Read: %s", r)
             return r
         except EOFError as e:
+            _LOGGER.error("read failed: %s", str(e))
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
     @classmethod
@@ -133,6 +134,7 @@ class DenonDevice(MediaPlayerEntity):
         try:
             telnet.write(command.encode("ASCII") + b"\r")
         except EOFError as e:
+            _LOGGER.error("write failed: %s", str(e))
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
     @classmethod
