@@ -236,6 +236,11 @@ class DenonDevice(MediaPlayerEntity):
         try:
             telnet = self._connect_telnet()
         except TelnetError:
+            self._pwstate = None
+            self._mediasource = ""
+            self._mediainfo = ""
+            self._muted = None
+            self._volume = None
             return False
 
         if self._should_setup_sources:
@@ -299,22 +304,24 @@ class DenonDevice(MediaPlayerEntity):
         return None
 
     @property
-    def volume_level(self):
+    def volume_level(self) -> float | None:
         """Volume level of the media player (0..1)."""
+        if self._volume is None:
+            return None
         return self._volume / self._volume_max
 
     @property
-    def is_volume_muted(self):
+    def is_volume_muted(self) -> bool | None:
         """Return boolean if volume is currently muted."""
         return self._muted
 
     @property
-    def source_list(self):
+    def source_list(self) -> list:
         """Return the list of available input sources."""
         return sorted(self._source_list.keys())
 
     @property
-    def media_title(self):
+    def media_title(self) -> str | None:
         """Return the current media info."""
         return self._mediainfo
 
