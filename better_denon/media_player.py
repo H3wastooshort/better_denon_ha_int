@@ -43,7 +43,7 @@ SUPPORT_MEDIA_MODES = (
 PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
-        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+        vol.Optional(CONF_NAME, default=""): cv.string,
     }
 )
 
@@ -205,13 +205,15 @@ class DenonDevice(MediaPlayerEntity):
 
     def _setup_sources(self, telnet):
         # NSFRN - Network name
-        if self._name is None:
+        if self._name == "": #if nameless, try reading name from network
             nsfrn = self.telnet_request(telnet, "NSFRN ?")
             for line in nsfrn.split("\r"):
                 try:
                     self._name = self._get_data(line,"NSFRN ")
                 except ValueError:
                     pass
+        if self._name == "": #if still nameless, use default
+            self._name = DEFAULT_NAME
 
         # SSFUN - Configured sources with (optional) names
         self._source_list = dict()
