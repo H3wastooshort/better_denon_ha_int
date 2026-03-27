@@ -179,7 +179,10 @@ class DenonDevice(MediaPlayerEntity):
         """Gets data after key"""
         start = raw.index(key) + len(key)
         end = raw.find("\r", start)
-        return raw[start:end]
+        if end > 0:
+            return raw[start:end]
+        else:
+            return raw[start:]
 
     def _setup_sources(self, telnet):
         # NSFRN - Network name
