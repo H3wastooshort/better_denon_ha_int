@@ -122,8 +122,8 @@ class DenonDevice(MediaPlayerEntity):
         self._volume_max : int = 60
         self._muted : bool = False
         self._source_list : dict = dict()
-        self._mediasource : str = ""
-        self._mediainfo : str = ""
+        self._mediasource : str | None = None
+        self._mediainfo : str | None = None
         self._soundmode : str | None = None
         self._soundmode_list : dict = SOUND_MODES
 
@@ -256,8 +256,8 @@ class DenonDevice(MediaPlayerEntity):
             telnet = self._connect_telnet()
         except TelnetError:
             self._pwstate = None
-            self._mediasource = ""
-            self._mediainfo = ""
+            self._mediasource = None
+            self._mediainfo = None
             self._muted = None
             self._volume = None
             self._should_setup_sources = True
@@ -367,8 +367,9 @@ class DenonDevice(MediaPlayerEntity):
         for pretty_name, name in self._source_list.items():
             if self._mediasource == name:
                 return pretty_name
-        if len(self._mediasource) > 0:
-            return self._mediainfo
+        if type(self._mediasource) == str:
+            if len(self._mediasource) > 0:
+                return self._mediasource
         return None
 
     @property
