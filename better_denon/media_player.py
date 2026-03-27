@@ -345,6 +345,8 @@ class DenonDevice(MediaPlayerEntity):
         for pretty_name, name in self._source_list.items():
             if self._mediasource == name:
                 return pretty_name
+        if len(self._mediasource) > 0:
+            return self._mediainfo
         return None
 
     def turn_off(self) -> None:
