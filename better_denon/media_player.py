@@ -130,6 +130,7 @@ class DenonDevice(MediaPlayerEntity):
         self._should_setup_sources = True
 
     def _connect_telnet(self) -> telnetlib.Telnet:
+        """Establish a telnet connection and return it."""
         try:
             _LOGGER.debug("Attempting connection to %s", self._host)
             return telnetlib.Telnet(self._host)
@@ -139,6 +140,7 @@ class DenonDevice(MediaPlayerEntity):
 
     @classmethod
     def _read_telnet(self,telnet) -> str:
+        """Read whatever data is currently in the buffer."""
         try:
             r = telnet.read_very_eager().decode("ASCII")
             _LOGGER.debug("Partial Read: %s", r)
@@ -149,6 +151,7 @@ class DenonDevice(MediaPlayerEntity):
 
     @classmethod
     def _write_telnet(self,telnet,command):
+        """Send a command via telnet."""
         _LOGGER.debug("Sending: %s", command)
         try:
             telnet.write(command.encode("ASCII") + b"\r")
@@ -158,6 +161,7 @@ class DenonDevice(MediaPlayerEntity):
 
     @classmethod
     def _read_telnet_until_pause(self, telnet) -> str:
+        """Read from Telnet, until there's no more data coming in."""
         rcv = ""
         starttime = time.monotonic_ns()
         time_since_data = starttime + (1000 * 1000 * 1000) #give extra 1000ms initially for high ping
@@ -188,14 +192,14 @@ class DenonDevice(MediaPlayerEntity):
         return lines[0] if lines else ""
 
     def telnet_command(self, command) -> None:
-        """Establish a telnet connection and sends `command`."""
+        """Establish a telnet connection and send `command`. Ignore response."""
         telnet = self._connect_telnet()
         self._write_telnet(telnet,command)
         telnet.close()
 
     @classmethod
     def _get_data(self, raw:str,key:str):
-        """Gets data after key"""
+        """Get data between key and the following \\r."""
         start = raw.index(key) + len(key)
         end = raw.find("\r", start)
         if end > 0:
@@ -353,7 +357,7 @@ class DenonDevice(MediaPlayerEntity):
 
     @property
     def media_title(self) -> str | None:
-        """Return the current media info."""
+        """Return the current media info or fall back to source name."""
         return self._mediainfo
 
     @property
@@ -441,11 +445,11 @@ class DenonDevice(MediaPlayerEntity):
         self._should_setup_sources = True
 
     def select_source(self, source: str) -> None:
-        """Select input source."""
+        """Select an input source."""
         src_denon = self._source_list.get(source,source)
         self.telnet_command(f"SI{src_denon}")
 
     def select_sound_mode(self, sound_mode: str) -> None:
-        """Select sound mode."""
+        """Select a sound mode."""
         sound_mode_denon = self._soundmode_list.get(sound_mode,sound_mode)
         self.telnet_command(f"MS{sound_mode_denon}")
