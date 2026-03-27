@@ -241,6 +241,7 @@ class DenonDevice(MediaPlayerEntity):
             self._mediainfo = ""
             self._muted = None
             self._volume = None
+            self._should_setup_sources = True
             return False
 
         if self._should_setup_sources:
@@ -252,6 +253,7 @@ class DenonDevice(MediaPlayerEntity):
             if new_pwstate == "PWON":
                 self._should_setup_sources = True
         self._pwstate = new_pwstate
+        
         for line in self.telnet_request(telnet, "MV?", all_lines=True):
             if line.startswith("MVMAX "):
                 # only grab two digit max, don't care about any half digit
@@ -259,11 +261,16 @@ class DenonDevice(MediaPlayerEntity):
                 continue
             if line.startswith("MV"):
                 self._volume = int(line.removeprefix("MV"))
+        
         self._muted = self.telnet_request(telnet, "MU?") == "MUON"
-        self._mediasource = self._get_data(
-            self.telnet_request(telnet, "SI?"),
-            "SI"
-        )
+
+        try:
+            self._mediasource = self._get_data(
+                self.telnet_request(telnet, "SI?"),
+                "SI"
+            )
+        except ValueError:
+            self._mediasource = None
 
         if self._mediasource in MEDIA_MODES.values():
             self._mediainfo = ""
@@ -306,7 +313,7 @@ class DenonDevice(MediaPlayerEntity):
     @property
     def volume_level(self) -> float | None:
         """Volume level of the media player (0..1)."""
-        if self._volume is None:
+        if type(self._volume) != int or type(self._volume_max) != int:
             return None
         return self._volume / self._volume_max
 
