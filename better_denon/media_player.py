@@ -242,7 +242,11 @@ class DenonDevice(MediaPlayerEntity):
             self._setup_sources(telnet)
             self._should_setup_sources = False
 
-        self._pwstate = self.telnet_request(telnet, "PW?")
+        new_pwstate = self.telnet_request(telnet, "PW?")
+        if self._pwstate != new_pwstate:
+            if new_pwstate == "PWON":
+                self._should_setup_sources = True
+        self._pwstate = new_pwstate
         for line in self.telnet_request(telnet, "MV?", all_lines=True):
             if line.startswith("MVMAX "):
                 # only grab two digit max, don't care about any half digit
