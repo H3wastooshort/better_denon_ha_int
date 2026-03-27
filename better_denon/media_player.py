@@ -443,7 +443,7 @@ class DenonDevice(MediaPlayerEntity):
         src_denon = self._source_list.get(source,source)
         self.telnet_command(f"SI{src_denon}")
 
-    def select_soundmode(self, sound_mode: str) -> None:
+    def select_sound_mode(self, sound_mode: str) -> None:
         """Select sound mode."""
         sound_mode_denon = self._soundmode_list.get(sound_mode,sound_mode)
         self.telnet_command(f"MS{sound_mode}")
