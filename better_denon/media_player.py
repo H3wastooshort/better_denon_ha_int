@@ -152,7 +152,8 @@ class DenonDevice(MediaPlayerEntity):
             _LOGGER.debug("Attempting connection to %s", self._host)
             self._connection = telnetlib.Telnet(self._host)
         except OSError as e:
-            _LOGGER.error("Connection to %s failed: %s", self._host, str(e))
+            _LOGGER.warn("Connection to %s failed: %s", self._host, str(e))
+            self._disconnect_telnet()
             raise TelnetError("could not open connection: "+str(e))
 
     def _ensure_telnet(self):
@@ -166,8 +167,8 @@ class DenonDevice(MediaPlayerEntity):
             _LOGGER.debug("Partial Read: %s", r)
             return r
         except EOFError as e:
-            self._connection = None
-            _LOGGER.error("read failed: %s", str(e))
+            _LOGGER.warn("read failed: %s", str(e))
+            self._disconnect_telnet()
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
     def _write_telnet(self,command:str):
@@ -176,7 +177,8 @@ class DenonDevice(MediaPlayerEntity):
         try:
             self._connection.write(command.encode("ASCII") + b"\r")
         except EOFError as e:
-            _LOGGER.error("write failed: %s", str(e))
+            _LOGGER.warn("write failed: %s", str(e))
+            self._disconnect_telnet()
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
     @classmethod
@@ -212,8 +214,11 @@ class DenonDevice(MediaPlayerEntity):
 
     def _telnet_command(self, command:str) -> None:
         """Establish a telnet connection and send `command`. Ignore response."""
-        self._ensure_telnet()
-        self._write_telnet(command)
+        try:
+            self._ensure_telnet()
+            self._write_telnet(command)
+        except TelnetError as e:
+            _LOGGER.error("Could not send command: %s", str(e))
         if not self._use_persistent_connection:
             self._disconnect_telnet()
 
@@ -274,20 +279,20 @@ class DenonDevice(MediaPlayerEntity):
 
     def update(self) -> None:
         """Get the latest details from the device."""
-        self.do_update()
-
-    def do_update(self) -> bool:
-        """Get the latest details from the device, as boolean."""
         try:
-            self._ensure_telnet()
-        except TelnetError:
+            self._attempt_update()
+        except TelnetError as e:
             self._pwstate = None
             self._mediasource = None
             self._mediainfo = None
             self._muted = None
             self._volume = None
             self._should_setup_sources = True
-            return False
+            _LOGGER.error("Could not fetch update: %s", str(e))
+
+    def _attempt_update(self) -> None:
+        """Get the latest details from the device, as boolean."""
+        self._ensure_telnet()
 
         if self._should_setup_sources:
             self._setup_sources()
@@ -347,7 +352,6 @@ class DenonDevice(MediaPlayerEntity):
 
         if not self._use_persistent_connection:
             self._disconnect_telnet()
-        return True
 
     @property
     def name(self) -> str:
