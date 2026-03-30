@@ -7,6 +7,7 @@ import logging
 import telnetlib  # pylint: disable=deprecated-module
 import voluptuous as vol
 import time
+import asyncio
 
 from homeassistant.components.media_player import (
     PLATFORM_SCHEMA as MEDIA_PLAYER_PLATFORM_SCHEMA,
@@ -133,10 +134,12 @@ class DenonDevice(MediaPlayerEntity):
         self._soundmode_list : dict = SOUND_MODES
         self._use_persistent_connection : bool = persistent_connection
         self._connection : telnetlib.Telnet | None = None
+        self._connection_lock : asyncio.Lock = asyncio.Lock()
 
         self._should_setup_sources = True
 
     def _disconnect_telnet(self) -> None:
+        """Close telnet connection, if one exists."""
         if self._connection is not None:
             conn = self._connection #do this to make sure self._connectiion is always none
             self._connection = None
@@ -152,13 +155,14 @@ class DenonDevice(MediaPlayerEntity):
 
         try:
             _LOGGER.debug("Attempting connection to %s", self._host)
-            self._connection = telnetlib.Telnet(self._host, timeout=2)
+            self._connection = telnetlib.Telnet(self._host, timeout=5)
         except OSError as e:
             _LOGGER.warn("Connection to %s failed: %s", self._host, str(e))
             self._disconnect_telnet()
             raise TelnetError("could not open connection: "+str(e))
 
     def _ensure_telnet(self):
+        """Ensure that a connection is established."""
         if self._connection is None:
             self._connect_telnet()
 
@@ -204,26 +208,28 @@ class DenonDevice(MediaPlayerEntity):
 
     def _telnet_request(self, command:str, all_lines:bool=False):
         """Execute `command` and return the response."""
-        self._read_telnet() #clear buffer
-        self._write_telnet(command)
-        lines = self._read_telnet_until_pause().split("\r")
-        lines = [l.strip() for l in lines]
-        _LOGGER.debug("Received: %s", str(lines))
-        if all_lines:
-            return lines
-        return lines[0] if lines else ""
+        async with self._connection_lock:
+            self._read_telnet() #clear buffer
+            self._write_telnet(command)
+            lines = self._read_telnet_until_pause().split("\r")
+            lines = [l.strip() for l in lines]
+            _LOGGER.debug("Received: %s", str(lines))
+            if all_lines:
+                return lines
+            return lines[0] if lines else ""
 
     def _telnet_command(self, command:str) -> None:
         """Establish a telnet connection and send `command`. Ignore response."""
-        try:
-            self._ensure_telnet()
-            self._write_telnet(command)
-        except TelnetError as e:
-            error = "Could not send command: %s" % str(e)
-            _LOGGER.error(error)
-            raise HomeAssistantError(error)
-        if not self._use_persistent_connection:
-            self._disconnect_telnet()
+        async with self._connection_lock:
+            try:
+                self._ensure_telnet()
+                self._write_telnet(command)
+            except TelnetError as e:
+                error = "Could not send command: %s" % str(e)
+                _LOGGER.error(error)
+                raise HomeAssistantError(error)
+            if not self._use_persistent_connection:
+                self._disconnect_telnet()
 
     @classmethod
     def _get_data(self, raw:str,key:str):
