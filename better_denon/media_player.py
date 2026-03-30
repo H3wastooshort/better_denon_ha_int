@@ -207,16 +207,16 @@ class DenonDevice(MediaPlayerEntity):
         return rcv
 
     async def _telnet_request(self, command:str, all_lines:bool=False):
-        """Execute `command` and return the response."""
-        async with self._connection_lock:
-            self._read_telnet() #clear buffer
-            self._write_telnet(command)
-            lines = (await self._read_telnet_until_pause()).split("\r")
-            lines = [l.strip() for l in lines]
-            _LOGGER.debug("Received: %s", str(lines))
-            if all_lines:
-                return lines
-            return lines[0] if lines else ""
+        """Execute `command` and return the response.
+        CALLER MUST LOCK CONNECTION!"""
+        self._read_telnet() #clear buffer
+        self._write_telnet(command)
+        lines = (await self._read_telnet_until_pause()).split("\r")
+        lines = [l.strip() for l in lines]
+        _LOGGER.debug("Received: %s", str(lines))
+        if all_lines:
+            return lines
+        return lines[0] if lines else ""
 
     async def _telnet_command(self, command:str) -> None:
         """Establish a telnet connection and send `command`. Ignore response."""
@@ -242,6 +242,8 @@ class DenonDevice(MediaPlayerEntity):
             return raw[start:]
 
     async def _setup_sources(self):
+        """Read source names and set up source selection list.
+        CALLER MUST LOCK CONNECTION!"""
         # NSFRN - Network name
         if self._name == "": #if nameless, try reading name from network
             nsfrn = await self._telnet_request("NSFRN ?")
@@ -289,7 +291,8 @@ class DenonDevice(MediaPlayerEntity):
     async def async_update(self) -> None:
         """Get the latest details from the device."""
         try:
-            await self._attempt_update()
+            async with self._connection_lock:
+                await self._attempt_update()
         except TelnetError as e:
             self._pwstate = None
             self._mediasource = None
@@ -301,7 +304,9 @@ class DenonDevice(MediaPlayerEntity):
             raise UpdateFailed(str(e), retry_after=15)
 
     async def _attempt_update(self) -> None:
-        """Get the latest details from the device, as boolean."""
+        """Get the latest details from the device, as boolean.
+        CALLER MUST LOCK CONNECTION!"""
+
         self._ensure_telnet()
 
         if self._should_setup_sources:
