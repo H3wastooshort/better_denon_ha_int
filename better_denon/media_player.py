@@ -40,10 +40,13 @@ SUPPORT_MEDIA_MODES = (
     | MediaPlayerEntityFeature.PLAY
 )
 
+CONF_PERSISTENT_CONNECTION = "persistent_connection"
+
 PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Optional(CONF_NAME, default=""): cv.string,
+        vol.Optional(CONF_PERSISTENT_CONNECTION, default=True): cv.boolean,
     }
 )
 
@@ -103,7 +106,7 @@ def setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the Denon platform."""
-    denon = DenonDevice(config[CONF_NAME], config[CONF_HOST])
+    denon = DenonDevice(config[CONF_NAME], config[CONF_HOST], config[CONF_PERSISTENT_CONNECTION]) 
     add_entities([denon])
 
 class TelnetError(Exception):
@@ -112,7 +115,7 @@ class TelnetError(Exception):
 class DenonDevice(MediaPlayerEntity):
     """Representation of a Denon device."""
 
-    def __init__(self, name:str, host:str):
+    def __init__(self, name:str, host:str, persistent_connection:bool):
         """Initialize the Denon device."""
         self._name : str = name
         self._host : str = host
@@ -126,47 +129,64 @@ class DenonDevice(MediaPlayerEntity):
         self._mediainfo : str | None = None
         self._soundmode : str | None = None
         self._soundmode_list : dict = SOUND_MODES
+        self._use_persistent_connection : bool = persistent_connection
+        self._connection : telnetlib.Telnet | None = None
 
         self._should_setup_sources = True
 
-    def _connect_telnet(self) -> telnetlib.Telnet:
+    def _disconnect_telnet(self) -> None:
+        if self._connection is not None:
+            conn = self._connection #do this to make sure self._connectiion is always none
+            self._connection = None
+            try:
+                conn.close()
+            except Exception as e:
+                _LOGGER.warn("Unexpected %s while trying to close connection: %s", str(type(e)), str(e))
+
+    def _connect_telnet(self) -> None:
         """Establish a telnet connection and return it."""
+
+        self._disconnect_telnet()
+
         try:
             _LOGGER.debug("Attempting connection to %s", self._host)
-            return telnetlib.Telnet(self._host)
+            self._connection = telnetlib.Telnet(self._host)
         except OSError as e:
             _LOGGER.error("Connection to %s failed: %s", self._host, str(e))
             raise TelnetError("could not open connection: "+str(e))
 
-    @classmethod
-    def _read_telnet(self,telnet:telnetlib.Telnet) -> str:
+    def _ensure_telnet(self):
+        if self._connection is None:
+            self._connect_telnet()
+
+    def _read_telnet(self) -> str:
         """Read whatever data is currently in the buffer."""
         try:
-            r = telnet.read_very_eager().decode("ASCII")
+            r = self._connection.read_very_eager().decode("ASCII")
             _LOGGER.debug("Partial Read: %s", r)
             return r
         except EOFError as e:
+            self._connection = None
             _LOGGER.error("read failed: %s", str(e))
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
-    @classmethod
-    def _write_telnet(self,telnet:telnetlib.Telnet,command:str):
+    def _write_telnet(self,command:str):
         """Send a command via telnet."""
         _LOGGER.debug("Sending: %s", command)
         try:
-            telnet.write(command.encode("ASCII") + b"\r")
+            self._connection.write(command.encode("ASCII") + b"\r")
         except EOFError as e:
             _LOGGER.error("write failed: %s", str(e))
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
     @classmethod
-    def _read_telnet_until_pause(self, telnet:telnetlib.Telnet) -> str:
-        """Read from Telnet, until there's no more data coming in."""
+    def _read_telnet_until_pause(self) -> str:
+        """Read from until there's no more data coming in."""
         rcv = ""
         starttime = time.monotonic_ns()
         time_since_data = starttime + (1000 * 1000 * 1000) #give extra 1000ms initially for high ping
         while True:
-            incoming = self._read_telnet(telnet)
+            incoming = self._read_telnet()
             rcv += incoming
             time.sleep(0.01)
             t_now = time.monotonic_ns()
@@ -179,12 +199,11 @@ class DenonDevice(MediaPlayerEntity):
         _LOGGER.debug("Full Read in %.1fms: %s", ((time.monotonic_ns() - starttime) / 1000) / 1000, rcv)
         return rcv
 
-    @classmethod
-    def _telnet_request(self, telnet:telnetlib.Telnet, command:str, all_lines:bool=False):
+    def _telnet_request(self, command:str, all_lines:bool=False):
         """Execute `command` and return the response."""
-        self._read_telnet(telnet) #clear buffer
-        self._write_telnet(telnet, command)
-        lines = self._read_telnet_until_pause(telnet).split("\r")
+        self._read_telnet() #clear buffer
+        self._write_telnet(command)
+        lines = self._read_telnet_until_pause().split("\r")
         lines = [l.strip() for l in lines]
         _LOGGER.debug("Received: %s", str(lines))
         if all_lines:
@@ -193,9 +212,10 @@ class DenonDevice(MediaPlayerEntity):
 
     def _telnet_command(self, command:str) -> None:
         """Establish a telnet connection and send `command`. Ignore response."""
-        telnet = self._connect_telnet()
-        self._write_telnet(telnet,command)
-        telnet.close()
+        self._ensure_telnet()
+        self._write_telnet(command)
+        if not self._use_persistent_connection:
+            self._disconnect_telnet()
 
     @classmethod
     def _get_data(self, raw:str,key:str):
@@ -207,10 +227,10 @@ class DenonDevice(MediaPlayerEntity):
         else:
             return raw[start:]
 
-    def _setup_sources(self, telnet:telnetlib.Telnet):
+    def _setup_sources(self):
         # NSFRN - Network name
         if self._name == "": #if nameless, try reading name from network
-            nsfrn = self._telnet_request(telnet, "NSFRN ?")
+            nsfrn = self._telnet_request("NSFRN ?")
             for line in nsfrn.split("\r"):
                 try:
                     self._name = self._get_data(line,"NSFRN ")
@@ -221,7 +241,7 @@ class DenonDevice(MediaPlayerEntity):
 
         # SSFUN - Configured sources with (optional) names
         self._source_list = dict()
-        for line in self._telnet_request(telnet, "SSFUN ?", all_lines=True):
+        for line in self._telnet_request("SSFUN ?", all_lines=True):
             try:
                 ssfun = self._get_data(line,"SSFUN")
                 ssfun = ssfun.split(" ", 1)
@@ -240,7 +260,7 @@ class DenonDevice(MediaPlayerEntity):
             self._source_list = NORMAL_INPUTS | MEDIA_MODES
 
         # SSSOD - Deleted sources
-        for line in self._telnet_request(telnet, "SSSOD ?", all_lines=True):
+        for line in self._telnet_request("SSSOD ?", all_lines=True):
             try:
                 data = self._get_data(line,"SSSOD")
             except ValueError:
@@ -259,7 +279,7 @@ class DenonDevice(MediaPlayerEntity):
     def do_update(self) -> bool:
         """Get the latest details from the device, as boolean."""
         try:
-            telnet = self._connect_telnet()
+            self._ensure_telnet()
         except TelnetError:
             self._pwstate = None
             self._mediasource = None
@@ -270,16 +290,16 @@ class DenonDevice(MediaPlayerEntity):
             return False
 
         if self._should_setup_sources:
-            self._setup_sources(telnet)
+            self._setup_sources()
             self._should_setup_sources = False
 
-        new_pwstate = self._telnet_request(telnet, "PW?")
+        new_pwstate = self._telnet_request("PW?")
         if self._pwstate != new_pwstate:
             if new_pwstate == "PWON":
                 self._should_setup_sources = True
         self._pwstate = new_pwstate
         
-        for line in self._telnet_request(telnet, "MV?", all_lines=True):
+        for line in self._telnet_request("MV?", all_lines=True):
             if line.startswith("MVMAX "):
                 # only grab two digit max, don't care about any half digit
                 self._volume_max = int(line[len("MVMAX ") : len("MVMAX XX")])
@@ -287,11 +307,11 @@ class DenonDevice(MediaPlayerEntity):
             if line.startswith("MV"):
                 self._volume = int(line.removeprefix("MV"))
         
-        self._muted = self._telnet_request(telnet, "MU?") == "MUON"
+        self._muted = self._telnet_request("MU?") == "MUON"
 
         try:
             self._mediasource = self._get_data(
-                self._telnet_request(telnet, "SI?"),
+                self._telnet_request("SI?"),
                 "SI"
             )
         except ValueError:
@@ -299,7 +319,7 @@ class DenonDevice(MediaPlayerEntity):
 
         try:
             self._soundmode = self._get_data(
-                self._telnet_request(telnet, "MS?"),
+                self._telnet_request("MS?"),
                 "MS"
             )
         except ValueError:
@@ -318,14 +338,15 @@ class DenonDevice(MediaPlayerEntity):
                 "NSE7",
                 "NSE8",
             ]
-            answer = self._telnet_request(telnet, "NSE", all_lines=True)
+            answer = self._telnet_request("NSE", all_lines=True)
             self._mediainfo += "\n".join(
                 [self._get_data(answer, code) for code in answer_codes] 
             )
         else:
             self._mediainfo = self.source
 
-        telnet.close()
+        if not self._use_persistent_connection:
+            self._disconnect_telnet()
         return True
 
     @property
