@@ -195,7 +195,7 @@ class DenonDevice(MediaPlayerEntity):
         while True:
             incoming = self._read_telnet()
             rcv += incoming
-            asyncio.sleep(0.01)
+            await asyncio.sleep(0.01)
             t_now = time.monotonic_ns()
             if len(incoming) > 1:
                 time_since_data = t_now
