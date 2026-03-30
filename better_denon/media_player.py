@@ -164,7 +164,7 @@ class DenonDevice(MediaPlayerEntity):
         """Read whatever data is currently in the buffer."""
         try:
             r = self._connection.read_very_eager().decode("ASCII")
-            _LOGGER.debug("Partial Read: %s", r)
+            #_LOGGER.debug("Partial Read: %s", r)
             return r
         except EOFError as e:
             _LOGGER.warn("read failed: %s", str(e))
