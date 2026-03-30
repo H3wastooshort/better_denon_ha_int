@@ -211,7 +211,7 @@ class DenonDevice(MediaPlayerEntity):
         async with self._connection_lock:
             self._read_telnet() #clear buffer
             self._write_telnet(command)
-            lines = await self._read_telnet_until_pause().split("\r")
+            lines = (await self._read_telnet_until_pause()).split("\r")
             lines = [l.strip() for l in lines]
             _LOGGER.debug("Received: %s", str(lines))
             if all_lines:
