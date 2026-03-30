@@ -19,6 +19,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.exceptions import ConfigEntryError, HomeAssistantError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -150,7 +152,7 @@ class DenonDevice(MediaPlayerEntity):
 
         try:
             _LOGGER.debug("Attempting connection to %s", self._host)
-            self._connection = telnetlib.Telnet(self._host, timeout=1000)
+            self._connection = telnetlib.Telnet(self._host, timeout=2)
         except OSError as e:
             _LOGGER.warn("Connection to %s failed: %s", self._host, str(e))
             self._disconnect_telnet()
@@ -217,7 +219,9 @@ class DenonDevice(MediaPlayerEntity):
             self._ensure_telnet()
             self._write_telnet(command)
         except TelnetError as e:
-            _LOGGER.error("Could not send command: %s", str(e))
+            error = "Could not send command: %s" % str(e)
+            _LOGGER.error(error)
+            raise HomeAssistantError(error)
         if not self._use_persistent_connection:
             self._disconnect_telnet()
 
@@ -288,6 +292,7 @@ class DenonDevice(MediaPlayerEntity):
             self._volume = None
             self._should_setup_sources = True
             _LOGGER.error("Could not fetch update: %s", str(e))
+            raise UpdateFailed(str(e), retry_after=15)
 
     def _attempt_update(self) -> None:
         """Get the latest details from the device, as boolean."""
