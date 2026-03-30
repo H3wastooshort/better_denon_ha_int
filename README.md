@@ -1,6 +1,7 @@
 # better_denon
 An improvment on HomeAssistant's `denon` integration.
 
+please use the "stable" branch. "main" is for development
 
 ## Improvments
  - Sound Mode selection support
