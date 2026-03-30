@@ -181,7 +181,6 @@ class DenonDevice(MediaPlayerEntity):
             self._disconnect_telnet()
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
-    @classmethod
     def _read_telnet_until_pause(self) -> str:
         """Read from until there's no more data coming in."""
         rcv = ""
