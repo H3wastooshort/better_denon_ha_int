@@ -187,7 +187,7 @@ class DenonDevice(MediaPlayerEntity):
             self._disconnect_telnet()
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
-    def _read_telnet_until_pause(self) -> str:
+    async def _read_telnet_until_pause(self) -> str:
         """Read from until there's no more data coming in."""
         rcv = ""
         starttime = time.monotonic_ns()
@@ -195,7 +195,7 @@ class DenonDevice(MediaPlayerEntity):
         while True:
             incoming = self._read_telnet()
             rcv += incoming
-            time.sleep(0.01)
+            asyncio.sleep(0.01)
             t_now = time.monotonic_ns()
             if len(incoming) > 1:
                 time_since_data = t_now
@@ -206,19 +206,19 @@ class DenonDevice(MediaPlayerEntity):
         _LOGGER.debug("Full Read in %.1fms: %s", ((time.monotonic_ns() - starttime) / 1000) / 1000, rcv)
         return rcv
 
-    def _telnet_request(self, command:str, all_lines:bool=False):
+    async def _telnet_request(self, command:str, all_lines:bool=False):
         """Execute `command` and return the response."""
         async with self._connection_lock:
             self._read_telnet() #clear buffer
             self._write_telnet(command)
-            lines = self._read_telnet_until_pause().split("\r")
+            lines = await self._read_telnet_until_pause().split("\r")
             lines = [l.strip() for l in lines]
             _LOGGER.debug("Received: %s", str(lines))
             if all_lines:
                 return lines
             return lines[0] if lines else ""
 
-    def _telnet_command(self, command:str) -> None:
+    async def _telnet_command(self, command:str) -> None:
         """Establish a telnet connection and send `command`. Ignore response."""
         async with self._connection_lock:
             try:
@@ -241,10 +241,10 @@ class DenonDevice(MediaPlayerEntity):
         else:
             return raw[start:]
 
-    def _setup_sources(self):
+    async def _setup_sources(self):
         # NSFRN - Network name
         if self._name == "": #if nameless, try reading name from network
-            nsfrn = self._telnet_request("NSFRN ?")
+            nsfrn = await self._telnet_request("NSFRN ?")
             for line in nsfrn.split("\r"):
                 try:
                     self._name = self._get_data(line,"NSFRN ")
@@ -255,7 +255,7 @@ class DenonDevice(MediaPlayerEntity):
 
         # SSFUN - Configured sources with (optional) names
         self._source_list = dict()
-        for line in self._telnet_request("SSFUN ?", all_lines=True):
+        for line in await self._telnet_request("SSFUN ?", all_lines=True):
             try:
                 ssfun = self._get_data(line,"SSFUN")
                 ssfun = ssfun.split(" ", 1)
@@ -274,7 +274,7 @@ class DenonDevice(MediaPlayerEntity):
             self._source_list = NORMAL_INPUTS | MEDIA_MODES
 
         # SSSOD - Deleted sources
-        for line in self._telnet_request("SSSOD ?", all_lines=True):
+        for line in await self._telnet_request("SSSOD ?", all_lines=True):
             try:
                 data = self._get_data(line,"SSSOD")
             except ValueError:
@@ -286,10 +286,10 @@ class DenonDevice(MediaPlayerEntity):
                         del self._source_list[pretty_name]
                         break
 
-    def update(self) -> None:
+    async def async_update(self) -> None:
         """Get the latest details from the device."""
         try:
-            self._attempt_update()
+            await self._attempt_update()
         except TelnetError as e:
             self._pwstate = None
             self._mediasource = None
@@ -300,7 +300,7 @@ class DenonDevice(MediaPlayerEntity):
             _LOGGER.error("Could not fetch update: %s", str(e))
             raise UpdateFailed(str(e), retry_after=15)
 
-    def _attempt_update(self) -> None:
+    async def _attempt_update(self) -> None:
         """Get the latest details from the device, as boolean."""
         self._ensure_telnet()
 
@@ -308,13 +308,13 @@ class DenonDevice(MediaPlayerEntity):
             self._setup_sources()
             self._should_setup_sources = False
 
-        new_pwstate = self._telnet_request("PW?")
+        new_pwstate = await self._telnet_request("PW?")
         if self._pwstate != new_pwstate:
             if new_pwstate == "PWON":
                 self._should_setup_sources = True
         self._pwstate = new_pwstate
         
-        for line in self._telnet_request("MV?", all_lines=True):
+        for line in await self._telnet_request("MV?", all_lines=True):
             if line.startswith("MVMAX "):
                 # only grab two digit max, don't care about any half digit
                 self._volume_max = int(line[len("MVMAX ") : len("MVMAX XX")])
@@ -322,11 +322,11 @@ class DenonDevice(MediaPlayerEntity):
             if line.startswith("MV"):
                 self._volume = int(line.removeprefix("MV"))
         
-        self._muted = self._telnet_request("MU?") == "MUON"
+        self._muted = await self._telnet_request("MU?") == "MUON"
 
         try:
             self._mediasource = self._get_data(
-                self._telnet_request("SI?"),
+                await self._telnet_request("SI?"),
                 "SI"
             )
         except ValueError:
@@ -334,7 +334,7 @@ class DenonDevice(MediaPlayerEntity):
 
         try:
             self._soundmode = self._get_data(
-                self._telnet_request("MS?"),
+                await self._telnet_request("MS?"),
                 "MS"
             )
         except ValueError:
@@ -353,7 +353,7 @@ class DenonDevice(MediaPlayerEntity):
                 "NSE7",
                 "NSE8",
             ]
-            answer = self._telnet_request("NSE", all_lines=True)
+            answer = await self._telnet_request("NSE", all_lines=True)
             self._mediainfo += "\n".join(
                 [self._get_data(answer, code) for code in answer_codes] 
             )
@@ -434,58 +434,58 @@ class DenonDevice(MediaPlayerEntity):
         """Return the list of available input sources."""
         return sorted(self._soundmode_list.keys())
 
-    def turn_off(self) -> None:
+    async def async_turn_off(self) -> None:
         """Turn off media player."""
-        self._telnet_command("PWSTANDBY")
+        await self._telnet_command("PWSTANDBY")
 
-    def volume_up(self) -> None:
+    async def async_volume_up(self) -> None:
         """Volume up media player."""
-        self._telnet_command("MVUP")
+        await self._telnet_command("MVUP")
 
-    def volume_down(self) -> None:
+    async def async_volume_down(self) -> None:
         """Volume down media player."""
-        self._telnet_command("MVDOWN")
+        await self._telnet_command("MVDOWN")
 
-    def set_volume_level(self, volume: float) -> None:
+    async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level, range 0..1."""
-        self._telnet_command(f"MV{round(volume * self._volume_max):02}")
+        await self._telnet_command(f"MV{round(volume * self._volume_max):02}")
 
-    def mute_volume(self, mute: bool) -> None:
+    async def async_mute_volume(self, mute: bool) -> None:
         """Mute (true) or unmute (false) media player."""
         mute_status = "ON" if mute else "OFF"
-        self._telnet_command(f"MU{mute_status}")
+        await self._telnet_command(f"MU{mute_status}")
 
-    def media_play(self) -> None:
+    async def async_media_play(self) -> None:
         """Play media player."""
-        self._telnet_command("NS9A")
+        await self._telnet_command("NS9A")
 
-    def media_pause(self) -> None:
+    async def async_media_pause(self) -> None:
         """Pause media player."""
-        self._telnet_command("NS9B")
+        await self._telnet_command("NS9B")
 
-    def media_stop(self) -> None:
+    async def async_media_stop(self) -> None:
         """Pause media player."""
-        self._telnet_command("NS9C")
+        await self._telnet_command("NS9C")
 
-    def media_next_track(self) -> None:
+    async def async_media_next_track(self) -> None:
         """Send the next track command."""
-        self._telnet_command("NS9D")
+        await self._telnet_command("NS9D")
 
-    def media_previous_track(self) -> None:
+    async def async_media_previous_track(self) -> None:
         """Send the previous track command."""
-        self._telnet_command("NS9E")
+        await self._telnet_command("NS9E")
 
-    def turn_on(self) -> None:
+    async def async_turn_on(self) -> None:
         """Turn the media player on."""
-        self._telnet_command("PWON")
+        await self._telnet_command("PWON")
         self._should_setup_sources = True
 
-    def select_source(self, source: str) -> None:
+    async def async_select_source(self, source: str) -> None:
         """Select an input source."""
         src_denon = self._source_list.get(source,source)
-        self._telnet_command(f"SI{src_denon}")
+        await self._telnet_command(f"SI{src_denon}")
 
-    def select_sound_mode(self, sound_mode: str) -> None:
+    async def async_select_sound_mode(self, sound_mode: str) -> None:
         """Select a sound mode."""
         sound_mode_denon = self._soundmode_list.get(sound_mode,sound_mode)
-        self._telnet_command(f"MS{sound_mode_denon}")
+        await self._telnet_command(f"MS{sound_mode_denon}")
