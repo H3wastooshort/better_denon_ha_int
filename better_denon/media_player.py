@@ -413,8 +413,9 @@ class DenonDevice(MediaPlayerEntity):
         for pretty_name, name in self._soundmode_list.items():
             if self._soundmode == name:
                 return pretty_name
-        if len(self._soundmode) > 0:
-            return self._soundmode
+        if type(self._mediasource) == str:
+            if len(self._soundmode) > 0:
+                return self._soundmode
         return None
 
     @property
