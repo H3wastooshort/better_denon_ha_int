@@ -150,7 +150,7 @@ class DenonDevice(MediaPlayerEntity):
 
         try:
             _LOGGER.debug("Attempting connection to %s", self._host)
-            self._connection = telnetlib.Telnet(self._host)
+            self._connection = telnetlib.Telnet(self._host, timeout=1000)
         except OSError as e:
             _LOGGER.warn("Connection to %s failed: %s", self._host, str(e))
             self._disconnect_telnet()
