@@ -305,7 +305,7 @@ class DenonDevice(MediaPlayerEntity):
         self._ensure_telnet()
 
         if self._should_setup_sources:
-            self._setup_sources()
+            await self._setup_sources()
             self._should_setup_sources = False
 
         new_pwstate = await self._telnet_request("PW?")
