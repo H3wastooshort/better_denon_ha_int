@@ -81,6 +81,35 @@ MEDIA_MODES = {
     "USB": "USB",
 }
 
+# For backwards-compatibility, old names are respected
+BACKCOMPAT_NORMAL_INPUTS = {
+    "Cd": "CD",
+    "Dvd": "DVD",
+    "Blue ray": "BD",
+    "TV": "TV",
+    "Satellite / Cable": "SAT/CBL",
+    "Game": "GAME",
+    "Game2": "GAME2",
+    "Video Aux": "V.AUX",
+    "Dock": "DOCK",
+}
+
+BACKCOMPAT_MEDIA_MODES = {
+    "Tuner": "TUNER",
+    "Media server": "SERVER",
+    "Ipod dock": "IPOD",
+    "Net/USB": "NET/USB",
+    "Rapsody": "RHAPSODY",
+    "Napster": "NAPSTER",
+    "Pandora": "PANDORA",
+    "LastFM": "LASTFM",
+    "Flickr": "FLICKR",
+    "Favorites": "FAVORITES",
+    "Internet Radio": "IRADIO",
+    "USB/IPOD": "USB/IPOD",
+    "USB": "USB",
+}
+
 # Sub-modes of 'NET/USB'
 # {'USB': 'USB', 'iPod Direct': 'IPD', 'Internet Radio': 'IRP',
 #  'Favorites': 'FVP'}
@@ -487,7 +516,14 @@ class DenonDevice(MediaPlayerEntity):
 
     async def async_select_source(self, source: str) -> None:
         """Select an input source."""
-        src_denon = self._source_list.get(source,source)
+        # The translation from firendly-name to denon-name has 3 fallbacks.
+        src_denon = self._source_list.get(source, # First, try the list of renamed sources
+            (NORMAL_INPUTS|MEDIA_MODES).get(source, # Then, try the "stock" names
+                (BACKCOMPAT_NORMAL_INPUTS|BACKCOMPAT_MEDIA_MODES).get(source, # Then, try the legacy friendly-names
+                    source # Then, if all else fails, try the input directly, so denon-names can be used in automations
+                )
+            )
+        )
         await self._telnet_command(f"SI{src_denon}")
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
