@@ -53,6 +53,11 @@ PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
     }
 )
 
+#timeouts for read opearations
+READ_TIMEOUT_FIRST_DATA =  300 # if data flow did not start within READ_TIMEOUT_FIRST_DATA ms plus READ_TIMEOUT_NEXT_DATA ms, time out
+READ_TIMEOUT_NEXT_DATA  =  200 # if data has stopped flowing for READ_TIMEOUT_NEXT_DATA ms, time out
+READ_TIMEOUT_MAX_TOTAL  = 2000 # if transfer has taken more than READ_TIMEOUT_MAX_TOTAL ms in total, time out
+
 NORMAL_INPUTS = {
     "CD": "CD",
     "DVD": "DVD",
@@ -216,11 +221,12 @@ class DenonDevice(MediaPlayerEntity):
             self._disconnect_telnet()
             raise TelnetError("connection closed unexpectedly: "+str(e))
 
+    #TODO: implement function which only reads until a certian set of data tags is collected (for ex. {"MV", "MVMAX"})
     async def _read_telnet_until_pause(self) -> str:
         """Read from until there's no more data coming in."""
         rcv = ""
         starttime = time.monotonic_ns()
-        time_since_data = starttime + (1000 * 1000 * 1000) #give extra 1000ms initially for high ping
+        time_since_data = starttime + (READ_TIMEOUT_FIRST_DATA * 1000 * 1000) #give extra time initially to compensate high ping
         while True:
             incoming = self._read_telnet()
             rcv += incoming
@@ -228,9 +234,9 @@ class DenonDevice(MediaPlayerEntity):
             t_now = time.monotonic_ns()
             if len(incoming) > 1:
                 time_since_data = t_now
-            if t_now - time_since_data > (200 * 1000 * 1000): #wait 200ms for stop of data flow
+            if t_now - time_since_data > (READ_TIMEOUT_NEXT_DATA * 1000 * 1000): #wait for stop of data flow
                 break
-            if t_now - starttime > (2000 * 1000 * 1000): #wait for nomore than 1000ms
+            if t_now - starttime > (READ_TIMEOUT_MAX_TOTAL * 1000 * 1000): #wait for nomore than maximum allowd
                 break
         _LOGGER.debug("Full Read in %.1fms: %s", ((time.monotonic_ns() - starttime) / 1000) / 1000, rcv)
         return rcv
