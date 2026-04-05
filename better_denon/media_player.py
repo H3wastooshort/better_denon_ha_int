@@ -54,6 +54,7 @@ PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
 )
 
 #timeouts for read opearations
+#TODO: make these configurable with a is_rs232 config flag
 READ_TIMEOUT_FIRST_DATA =  300 # if data flow did not start within READ_TIMEOUT_FIRST_DATA ms plus READ_TIMEOUT_NEXT_DATA ms, time out
 READ_TIMEOUT_NEXT_DATA  =  200 # if data has stopped flowing for READ_TIMEOUT_NEXT_DATA ms, time out
 READ_TIMEOUT_MAX_TOTAL  = 2000 # if transfer has taken more than READ_TIMEOUT_MAX_TOTAL ms in total, time out
@@ -157,7 +158,7 @@ class DenonDevice(MediaPlayerEntity):
         self._name : str = name
         self._host : str = host
         self._pwstate : str = "PWSTANDBY"
-        self._volume : int = 0
+        self._volume : int | None = 0
         # Initial value 60dB, changed if we get a MVMAX
         self._volume_max : int = 60
         self._muted : bool = False
